@@ -1,14 +1,17 @@
 mod errors;
 mod tui;
 
+use base64::prelude::*;
 use color_eyre::{
     eyre::{bail, WrapErr},
+    owo_colors::OwoColorize,
     Result,
 };
-use crossterm::event::{KeyCode, KeyEventKind, KeyModifiers};
+use crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use ratatui::{
     layout::Alignment,
     prelude::*,
+    style::Stylize,
     widgets::{block::*, *},
 };
 use tui_textarea::{CursorMove, TextArea};
@@ -127,10 +130,31 @@ impl App {
 
             Mode::Normal => match event {
                 crossterm::event::KeyEvent {
+                    code: KeyCode::Char('u'),
+                    kind: KeyEventKind::Press | KeyEventKind::Repeat,
+                    ..
+                } => _ = self.editor.undo(),
+
+                crossterm::event::KeyEvent {
+                    code: KeyCode::Char('U'),
+                    kind: KeyEventKind::Press | KeyEventKind::Repeat,
+                    ..
+                } => _ = self.editor.redo(),
+
+                crossterm::event::KeyEvent {
                     code: KeyCode::Char('i'),
                     kind: KeyEventKind::Press,
                     ..
                 } => self.mode = Mode::Insert,
+
+                crossterm::event::KeyEvent {
+                    code: KeyCode::Char('a'),
+                    kind: KeyEventKind::Press,
+                    ..
+                } => {
+                    self.editor.move_cursor(CursorMove::Forward);
+                    self.mode = Mode::Insert;
+                }
 
                 crossterm::event::KeyEvent {
                     code: KeyCode::Char('v'),
@@ -143,7 +167,7 @@ impl App {
                 }
 
                 crossterm::event::KeyEvent {
-                    code: KeyCode::Char(';'),
+                    code: KeyCode::Char(';') | KeyCode::Char(' '),
                     kind: KeyEventKind::Press,
                     ..
                 } => self.mode = Mode::Command,
@@ -177,6 +201,69 @@ impl App {
                     kind: KeyEventKind::Press | KeyEventKind::Repeat,
                     ..
                 } => self.editor.move_cursor(CursorMove::Forward),
+
+                crossterm::event::KeyEvent {
+                    code: KeyCode::Char('b'),
+                    kind: KeyEventKind::Press | KeyEventKind::Repeat,
+                    ..
+                } => self.editor.move_cursor(CursorMove::WordBack),
+
+                crossterm::event::KeyEvent {
+                    code: KeyCode::Char('w'),
+                    kind: KeyEventKind::Press | KeyEventKind::Repeat,
+                    ..
+                } => self.editor.move_cursor(CursorMove::WordForward),
+
+                crossterm::event::KeyEvent {
+                    code: KeyCode::Char('E'),
+                    kind: KeyEventKind::Press,
+                    ..
+                } => self.editor.move_cursor(CursorMove::End),
+
+                crossterm::event::KeyEvent {
+                    code: KeyCode::Char('0'),
+                    kind: KeyEventKind::Press,
+                    ..
+                } => self.editor.move_cursor(CursorMove::Head),
+
+                crossterm::event::KeyEvent {
+                    code: KeyCode::Char('I'),
+                    kind: KeyEventKind::Press,
+                    ..
+                } => {
+                    self.editor.move_cursor(CursorMove::Head);
+                    self.mode = Mode::Insert;
+                }
+
+                crossterm::event::KeyEvent {
+                    code: KeyCode::Char('A'),
+                    kind: KeyEventKind::Press,
+                    ..
+                } => {
+                    self.editor.move_cursor(CursorMove::End);
+                    self.mode = Mode::Insert;
+                }
+
+                crossterm::event::KeyEvent {
+                    code: KeyCode::Char('o'),
+                    kind: KeyEventKind::Press,
+                    ..
+                } => {
+                    self.editor.move_cursor(CursorMove::End);
+                    self.editor.insert_newline();
+                    self.mode = Mode::Insert;
+                }
+
+                crossterm::event::KeyEvent {
+                    code: KeyCode::Char('O'),
+                    kind: KeyEventKind::Press,
+                    ..
+                } => {
+                    self.editor.move_cursor(CursorMove::Up);
+                    self.editor.move_cursor(CursorMove::End);
+                    self.editor.insert_newline();
+                    self.mode = Mode::Insert;
+                }
 
                 _ => {}
             },
@@ -212,7 +299,7 @@ impl App {
             },
 
             Mode::Visual(visual_type) => match event {
-                crossterm::event::KeyEvent {
+                KeyEvent {
                     code: KeyCode::Esc,
                     kind: KeyEventKind::Press,
                     ..
@@ -221,7 +308,7 @@ impl App {
                     self.mode = Mode::Normal;
                 }
 
-                crossterm::event::KeyEvent {
+                KeyEvent {
                     code: KeyCode::Char('y'),
                     kind: KeyEventKind::Press,
                     ..
@@ -230,7 +317,7 @@ impl App {
                     self.mode = Mode::Normal;
                 }
 
-                crossterm::event::KeyEvent {
+                KeyEvent {
                     code: KeyCode::Char('d'),
                     kind: KeyEventKind::Press,
                     ..
@@ -239,7 +326,16 @@ impl App {
                     self.mode = Mode::Normal;
                 }
 
-                crossterm::event::KeyEvent {
+                KeyEvent {
+                    code: KeyCode::Char('c'),
+                    kind: KeyEventKind::Press,
+                    ..
+                } => {
+                    self.editor.cut();
+                    self.mode = Mode::Insert;
+                }
+
+                KeyEvent {
                     code: KeyCode::Char('h'),
                     kind: KeyEventKind::Press,
                     ..
@@ -249,7 +345,7 @@ impl App {
                     VisualType::Block => {}
                 },
 
-                crossterm::event::KeyEvent {
+                KeyEvent {
                     code: KeyCode::Char('j'),
                     kind: KeyEventKind::Press,
                     ..
@@ -259,7 +355,7 @@ impl App {
                     VisualType::Block => {}
                 },
 
-                crossterm::event::KeyEvent {
+                KeyEvent {
                     code: KeyCode::Char('k'),
                     kind: KeyEventKind::Press,
                     ..
@@ -269,12 +365,44 @@ impl App {
                     VisualType::Block => {}
                 },
 
-                crossterm::event::KeyEvent {
+                KeyEvent {
                     code: KeyCode::Char('l'),
                     kind: KeyEventKind::Press,
                     ..
                 } => match visual_type {
                     VisualType::Character => self.editor.move_cursor(CursorMove::Forward),
+                    VisualType::Line => {}
+                    VisualType::Block => {}
+                },
+
+                KeyEvent {
+                    code: KeyCode::Char('E'),
+                    kind: KeyEventKind::Press,
+                    ..
+                } => self.editor.move_cursor(CursorMove::End),
+
+                KeyEvent {
+                    code: KeyCode::Char('0'),
+                    kind: KeyEventKind::Press,
+                    ..
+                } => self.editor.move_cursor(CursorMove::Head),
+
+                KeyEvent {
+                    code: KeyCode::Char('b'),
+                    kind: KeyEventKind::Press,
+                    ..
+                } => match visual_type {
+                    VisualType::Character => self.editor.move_cursor(CursorMove::WordBack),
+                    VisualType::Line => {}
+                    VisualType::Block => {}
+                },
+
+                KeyEvent {
+                    code: KeyCode::Char('w'),
+                    kind: KeyEventKind::Press,
+                    ..
+                } => match visual_type {
+                    VisualType::Character => self.editor.move_cursor(CursorMove::WordForward),
                     VisualType::Line => {}
                     VisualType::Block => {}
                 },
@@ -292,14 +420,21 @@ impl App {
     }
 
     fn update_editor(&mut self) {
+        if self.mode == Mode::Command {
+            self.editor
+                .set_cursor_style(Style::default().bg(Color::DarkGray));
+        } else {
+            self.editor.set_cursor_style(Style::default().reversed());
+        }
+
         self.editor
-            .set_line_number_style(Style::default().fg(Color::DarkGray));
+            .set_line_number_style(Style::default().fg(Color::Yellow));
 
         let block = Block::default()
             .borders(Borders::TOP)
             .border_type(BorderType::Double)
             .padding(Padding::uniform(1))
-            .title(" Gloop ")
+            .title(Span::from(" Gloop ").yellow())
             .title_alignment(Alignment::Center);
 
         self.editor.set_block(block);
@@ -312,7 +447,7 @@ impl App {
             .borders(Borders::ALL)
             .border_type(BorderType::Rounded)
             .padding(Padding::horizontal(1))
-            .title(" Command ")
+            .title(Span::from(" Command ").yellow())
             .title_alignment(Alignment::Right);
 
         self.commandline.set_block(block);
@@ -326,8 +461,49 @@ impl App {
         }
 
         if let Some(line) = lines.first() {
-            match line.as_str() {
+            match line.as_str().split_whitespace().next().unwrap_or_default() {
                 "q" => self.should_exit = true,
+
+                "json" => match line.as_str().split_whitespace().nth(1).unwrap_or_default() {
+                    "format" => {
+                        let ugly_json = self.editor.lines().join("\n");
+
+                        self.editor.select_all();
+                        self.editor.cut();
+
+                        let pretty_json = jsonxf::pretty_print(&ugly_json).unwrap();
+
+                        self.editor.insert_str(pretty_json);
+                    }
+
+                    _ => bail!("unknown command: {}", line),
+                },
+
+                "base64" => match line.as_str().split_whitespace().nth(1).unwrap_or_default() {
+                    "encode" => {
+                        let text = self.editor.lines().join("\n");
+
+                        self.editor.select_all();
+                        self.editor.cut();
+
+                        let encoded = BASE64_STANDARD.encode(text);
+                        self.editor.insert_str(encoded);
+                    }
+
+                    "decode" => {
+                        let text = self.editor.lines().join("\n");
+
+                        self.editor.select_all();
+                        self.editor.cut();
+
+                        let decoded = BASE64_STANDARD.decode(text)?;
+                        let decoded = String::from_utf8(decoded)?;
+                        self.editor.insert_str(decoded);
+                    }
+
+                    _ => bail!("unknown command: {}", line),
+                },
+
                 _ => bail!("unknown command: {}", line),
             }
         }
