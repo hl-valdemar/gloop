@@ -4,10 +4,9 @@ mod tui;
 use base64::prelude::*;
 use color_eyre::{
     eyre::{bail, WrapErr},
-    owo_colors::OwoColorize,
     Result,
 };
-use crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
+use crossterm::event::{KeyCode, KeyEvent, KeyEventKind};
 use ratatui::{
     layout::Alignment,
     prelude::*,
@@ -41,8 +40,6 @@ enum Mode {
 enum VisualType {
     #[default]
     Character,
-    Line,
-    Block,
 }
 
 struct App {
@@ -341,8 +338,6 @@ impl App {
                     ..
                 } => match visual_type {
                     VisualType::Character => self.editor.move_cursor(CursorMove::Back),
-                    VisualType::Line => {}
-                    VisualType::Block => {}
                 },
 
                 KeyEvent {
@@ -351,8 +346,6 @@ impl App {
                     ..
                 } => match visual_type {
                     VisualType::Character => self.editor.move_cursor(CursorMove::Down),
-                    VisualType::Line => {}
-                    VisualType::Block => {}
                 },
 
                 KeyEvent {
@@ -361,8 +354,6 @@ impl App {
                     ..
                 } => match visual_type {
                     VisualType::Character => self.editor.move_cursor(CursorMove::Up),
-                    VisualType::Line => {}
-                    VisualType::Block => {}
                 },
 
                 KeyEvent {
@@ -371,8 +362,6 @@ impl App {
                     ..
                 } => match visual_type {
                     VisualType::Character => self.editor.move_cursor(CursorMove::Forward),
-                    VisualType::Line => {}
-                    VisualType::Block => {}
                 },
 
                 KeyEvent {
@@ -393,8 +382,6 @@ impl App {
                     ..
                 } => match visual_type {
                     VisualType::Character => self.editor.move_cursor(CursorMove::WordBack),
-                    VisualType::Line => {}
-                    VisualType::Block => {}
                 },
 
                 KeyEvent {
@@ -403,8 +390,6 @@ impl App {
                     ..
                 } => match visual_type {
                     VisualType::Character => self.editor.move_cursor(CursorMove::WordForward),
-                    VisualType::Line => {}
-                    VisualType::Block => {}
                 },
 
                 _ => {}
